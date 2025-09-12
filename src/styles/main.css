@@ -1,0 +1,26 @@
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, Arial, sans-serif;
+}
+.app {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  grid-template-columns: 2fr 1fr;
+}
+.search-area {
+  display: grid;
+  gap: 16px;
+}
+.shopping-area {
+  display: grid;
+  gap: 16px;
+  position: sticky;
+  top: 16px;
+  height: fit-content;
+}
