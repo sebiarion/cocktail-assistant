@@ -1,6 +1,7 @@
 // src/components/app-toaster/index.js
 import { html, render } from "lit-html";
 import { onToast } from "../../lib/toast.js";
+import css from "./styles.css?inline";
 
 class AppToaster extends HTMLElement {
   constructor() {
@@ -36,37 +37,15 @@ class AppToaster extends HTMLElement {
     render(
       html`
         <style>
-          .toaster {
-            position: fixed;
-            right: 16px;
-            bottom: 16px;
-            display: grid;
-            gap: 8px;
-            z-index: 9999;
-          }
-          .toast {
-            min-width: 220px;
-            max-width: 360px;
-            padding: 10px 12px;
-            border-radius: 8px;
-            background: #222;
-            color: #fff;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-            opacity: 0.95;
-          }
-          .toast.info {
-            background: #2c7be5;
-          }
-          .toast.error {
-            background: #e55353;
-          }
+          ${css}
         </style>
         <div class="toaster">
           ${this._items.map(
-            (t) =>
-              html` <div class="toast ${t.type}">
+            (t) => html`
+              <div class="toast ${t.type}" role="alert">
                 <span>${t.message}</span>
-              </div>`,
+              </div>
+            `,
           )}
         </div>
       `,

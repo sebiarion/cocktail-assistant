@@ -1,10 +1,10 @@
 import { html, render } from "lit-html";
+import css from "./styles.css?inline";
 
 class CocktailCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-
     this._drink = null;
   }
 
@@ -39,65 +39,22 @@ class CocktailCard extends HTMLElement {
     render(
       html`
         <style>
-          .card {
-            display: grid;
-            gap: 8px;
-            padding: 12px;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            background: #fff;
-          }
-          .row {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 12px;
-            align-items: start;
-          }
-          .thumb {
-            width: 100%;
-            max-width: 120px;
-            height: auto;
-            border-radius: 8px;
-            object-fit: cover;
-          }
-          .title {
-            font-weight: 700;
-          }
-          .instr {
-            color: #374151;
-            font-size: 14px;
-            line-height: 1.35;
-          }
-          .actions {
-            display: flex;
-            gap: 8px;
-          }
-          .btn {
-            padding: 8px 12px;
-            border: 0;
-            border-radius: 8px;
-            background: #10b981;
-            color: #fff;
-            font-weight: 600;
-            cursor: pointer;
-          }
-          .btn:hover {
-            filter: brightness(0.95);
-          }
+          ${css}
         </style>
-
         <article class="card">
           <div class="row">
             ${d?.thumb
-              ? html`<img
-                  class="thumb"
-                  src=${d.thumb}
-                  alt=${d?.name || ""}
-                  loading="lazy"
-                />`
+              ? html`
+                  <img
+                    class="thumb"
+                    src=${d.thumb}
+                    alt=${d?.name || ""}
+                    loading="lazy"
+                  />
+                `
               : ""}
             <div>
-              <div class="title">${d?.name ?? ""}</div>
+              <h3 class="title">${d?.name ?? ""}</h3>
               ${d?.instructions
                 ? html`<p class="instr">${d.instructions}</p>`
                 : ""}
@@ -119,4 +76,6 @@ class CocktailCard extends HTMLElement {
   }
 }
 
-customElements.define("cocktail-card", CocktailCard);
+if (!customElements.get("cocktail-card")) {
+  customElements.define("cocktail-card", CocktailCard);
+}
