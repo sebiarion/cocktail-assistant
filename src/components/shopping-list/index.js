@@ -1,6 +1,9 @@
 import { html, render } from "lit-html";
 import { subscribe, add, remove, clear, getState } from "../../lib/store.js";
 import { toastInfo } from "../../lib/toast.js";
+import css from "./styles.css?inline";
+
+const LS_KEY = "cocktail-assistant:shopping-list";
 
 class ShoppingList extends HTMLElement {
   constructor() {
@@ -12,19 +15,49 @@ class ShoppingList extends HTMLElement {
   }
 
   connectedCallback() {
+    this._rehydrateFromLocalStorage();
+
     this._unsub = subscribe((s) => {
       this._state = s;
       this._render();
+      this._persistToLocalStorage();
     });
 
     document.addEventListener("add-ingredients", this._onAddIngredients);
-
     this._render();
   }
 
   disconnectedCallback() {
     this._unsub && this._unsub();
     document.removeEventListener("add-ingredients", this._onAddIngredients);
+  }
+
+  _rehydrateFromLocalStorage() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const items = parsed.flatMap((entry) => {
+        const measures = Array.isArray(entry.measures) ? entry.measures : [];
+        return measures.length
+          ? measures.map((m) => ({ name: entry.name, measure: m }))
+          : [{ name: entry.name, measure: "" }];
+      });
+      if (items.length) add(items);
+    } catch {}
+  }
+
+  _persistToLocalStorage() {
+    try {
+      const map =
+        this._state?.items instanceof Map ? this._state.items : new Map();
+      const arr = Array.from(map.values()).map((v) => ({
+        name: v.name,
+        measures: v.measures || [],
+      }));
+      localStorage.setItem(LS_KEY, JSON.stringify(arr));
+    } catch {}
   }
 
   _onAddIngredients(e) {
@@ -47,104 +80,70 @@ class ShoppingList extends HTMLElement {
   _render() {
     const itemsMap =
       this._state?.items instanceof Map ? this._state.items : new Map();
-    const entries = Array.from(itemsMap.values());
+
+    const entries = Array.from(itemsMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+
+    const total = entries.length;
 
     render(
       html`
         <style>
-          .wrap {
-            display: grid;
-            gap: 12px;
-          }
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          .title {
-            font-weight: 800;
-            font-size: 16px;
-          }
-          .btn,
-          .btn-danger {
-            padding: 8px 10px;
-            border: 0;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-          }
-          .btn {
-            background: #e5e7eb;
-            color: #111827;
-          }
-          .btn:hover {
-            filter: brightness(0.97);
-          }
-          .btn-danger {
-            background: #ef4444;
-            color: #fff;
-          }
-          .btn-danger:hover {
-            filter: brightness(0.95);
-          }
-
-          .list {
-            display: grid;
-            gap: 8px;
-          }
-          .item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 10px;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            background: #fff;
-          }
-          .name {
-            font-weight: 700;
-          }
-          .measures {
-            color: #374151;
-            font-size: 13px;
-          }
-          .empty {
-            color: #6b7280;
-            font-size: 14px;
-          }
+          ${css}
         </style>
+
+        <div class="sr-only" aria-live="polite">
+          ${total
+            ? `You have ${total} item(s) in the shopping list.`
+            : "Shopping list is empty."}
+        </div>
 
         <section class="wrap">
           <div class="header">
-            <div class="title">Shopping list</div>
-            ${entries.length
-              ? html`<button class="btn-danger" @click=${this._onClear}>
-                  Clear all
-                </button>`
+            <h3 class="title">
+              Shopping list
+              <span class="counter">(${total})</span>
+            </h3>
+            ${total
+              ? html`
+                  <button
+                    class="btn-danger"
+                    @click=${this._onClear}
+                    aria-label="Clear all ingredients"
+                  >
+                    Clear all
+                  </button>
+                `
               : html``}
           </div>
 
-          ${entries.length === 0
-            ? html`<div class="empty">
-                No items yet. Add ingredients from results.
-              </div>`
+          ${total === 0
+            ? html`
+                <div class="empty">
+                  No items yet. Add ingredients from results.
+                </div>
+              `
             : html`
-                <div class="list">
+                <div class="list" role="list">
                   ${entries.map(
                     (it) => html`
-                      <div class="item">
+                      <div class="item" role="listitem">
                         <div>
                           <div class="name">${it.name}</div>
-                          ${it.measures.length
-                            ? html`<div class="measures">
-                                ${it.measures.join(", ")}
-                              </div>`
+                          ${it.measures && it.measures.length
+                            ? html`
+                                <div class="measures">
+                                  ${it.measures.join(", ")}
+                                </div>
+                              `
                             : html``}
                         </div>
                         <button
                           class="btn"
                           @click=${() => this._onRemove(it.name)}
-                          aria-label="Remove ${it.name}"
+                          aria-label=${`Remove ${it.name}`}
+                          title=${`Remove ${it.name}`}
                         >
                           Remove
                         </button>

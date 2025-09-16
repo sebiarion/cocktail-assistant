@@ -1,29 +1,53 @@
 import { html, render } from "lit-html";
 import { searchCocktails } from "../../lib/api.js";
 import { toastInfo, toastError } from "../../lib/toast.js";
+import css from "./styles.css?inline";
 
 class CocktailList extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+
     this._status = "idle";
     this._drinks = [];
     this._query = "";
+    this._abort = null;
+    this._reqToken = 0;
+    this._max = 50;
     this._onSearch = this._onSearch.bind(this);
+  }
+
+  static get observedAttributes() {
+    return ["max"];
+  }
+  attributeChangedCallback(name, _old, val) {
+    if (name === "max") {
+      const n = Number(val);
+      if (!Number.isNaN(n) && n > 0) this._max = n;
+    }
   }
 
   connectedCallback() {
     document.addEventListener("search-requested", this._onSearch);
+    const maybeMax = Number(this.getAttribute("max"));
+    if (!Number.isNaN(maybeMax) && maybeMax > 0) this._max = maybeMax;
+
     this._render();
   }
 
   disconnectedCallback() {
     document.removeEventListener("search-requested", this._onSearch);
+    if (this._abort) this._abort.abort();
   }
 
   async _onSearch(e) {
     const q = (e.detail?.query || "").trim();
     this._query = q;
+
+    if (this._abort) this._abort.abort();
+    this._abort = new AbortController();
+    const myToken = ++this._reqToken;
+
     if (!q) {
       this._status = "idle";
       this._drinks = [];
@@ -37,9 +61,18 @@ class CocktailList extends HTMLElement {
       this._render();
 
       toastInfo("Searching…");
-      const drinks = await searchCocktails(q);
+      const drinks = await searchCocktails(q, {
+        signal: this._abort.signal,
+      }).catch((err) => {
+        if (err?.name === "AbortError") throw err;
+        throw err;
+      });
 
-      if (!drinks.length) {
+      if (myToken !== this._reqToken) return;
+
+      const list = Array.isArray(drinks) ? drinks.slice(0, this._max) : [];
+
+      if (list.length === 0) {
         this._status = "empty";
         this._drinks = [];
         this._render();
@@ -48,10 +81,19 @@ class CocktailList extends HTMLElement {
       }
 
       this._status = "done";
-      this._drinks = drinks;
+      this._drinks = list;
       this._render();
+
+      requestAnimationFrame(() => {
+        const first = this.shadowRoot?.querySelector("cocktail-card");
+        first?.focus?.();
+      });
+
       toastInfo("Here are the results.");
     } catch (err) {
+      if (err?.name === "AbortError") {
+        return;
+      }
       console.error("[cocktail-list] search error:", err);
       this._status = "error";
       this._drinks = [];
@@ -67,71 +109,50 @@ class CocktailList extends HTMLElement {
     render(
       html`
         <style>
-          .list {
-            display: grid;
-            gap: 12px;
-          }
-          .card {
-            display: grid;
-            gap: 6px;
-            padding: 12px;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            background: #fff;
-          }
-          .title {
-            font-weight: 700;
-          }
-          .loading,
-          .empty,
-          .error,
-          .idle {
-            color: #6b7280;
-            padding: 8px 0;
-          }
-          .thumb {
-            width: 100%;
-            max-width: 120px;
-            height: auto;
-            border-radius: 8px;
-            object-fit: cover;
-          }
-          .row {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 12px;
-            align-items: start;
-          }
-          .instr {
-            color: #374151;
-            font-size: 14px;
-            line-height: 1.35;
-          }
+          ${css}
         </style>
+
+        <div class="sr-only" aria-live="polite">
+          ${status === "loading" ? "Loading results…" : ""}
+          ${status === "empty" ? "No results." : ""}
+          ${status === "error" ? "Error." : ""}
+          ${status === "done" ? "Results ready." : ""}
+        </div>
 
         ${status === "idle"
           ? html`
-              <div class="idle">Type a cocktail name and press Search.</div>
+              <div class="status">Type a cocktail name and press Search.</div>
             `
           : ""}
         ${status === "loading"
-          ? html` <div class="loading">Loading…</div> `
+          ? html`
+              <div class="status">Loading…</div>
+              <div class="list" role="list" aria-busy="true">
+                <div class="skeleton"></div>
+                <div class="skeleton"></div>
+                <div class="skeleton"></div>
+              </div>
+            `
           : ""}
         ${status === "empty"
           ? html`
-              <div class="empty">
+              <div class="status">
                 No results for "<strong>${this._query}</strong>".
               </div>
             `
           : ""}
         ${status === "error"
-          ? html` <div class="error">Could not load results. Try again.</div> `
+          ? html` <div class="status">Could not load results. Try again.</div> `
           : ""}
         ${status === "done"
           ? html`
-              <div class="list">
+              <div class="list" role="list">
                 ${drinks.map(
-                  (d) => html` <cocktail-card .drink=${d}></cocktail-card> `,
+                  (d) => html`
+                    <div role="listitem">
+                      <cocktail-card .drink=${d} tabindex="0"></cocktail-card>
+                    </div>
+                  `,
                 )}
               </div>
             `
@@ -142,4 +163,6 @@ class CocktailList extends HTMLElement {
   }
 }
 
-customElements.define("cocktail-list", CocktailList);
+if (!customElements.get("cocktail-list")) {
+  customElements.define("cocktail-list", CocktailList);
+}
